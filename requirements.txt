@@ -1,0 +1,23 @@
+# Core dependencies
+streamlit>=1.39.0
+pandas>=2.2.0
+numpy>=1.26.0
+plotly>=5.17.0
+
+# Data fetching
+yfinance>=0.2.30
+
+# Machine Learning
+prophet>=1.1.5
+scikit-learn>=1.4.0
+
+# UI Components
+streamlit-option-menu>=0.3.6
+streamlit-aggrid>=0.3.4
+
+# Technical Analysis
+ta>=0.10.2
+
+# Additional utilities
+python-dateutil>=2.8.2
+requests>=2.31.0
