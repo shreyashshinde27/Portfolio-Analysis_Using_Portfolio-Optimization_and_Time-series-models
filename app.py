@@ -559,7 +559,7 @@ def main():
             [
                 "🏠 Dashboard",
                 "🔍 Price Analysis",
-                "🔮 Price Prediction",
+                "🔮 Price Forecast",
                 "📊 Portfolio Analysis",
                 "ℹ️ About"
             ],
@@ -587,7 +587,7 @@ def main():
         show_dashboard(analyzer, start_date, end_date)
     elif selected == "🔍 Price Analysis":
         show_stock_analysis(analyzer, start_date, end_date)
-    elif selected == "🔮 Price Prediction":
+    elif selected == "🔮 Price Forecast":
         show_stock_prediction(analyzer, start_date, end_date)
     elif selected == "📊 Portfolio Analysis":
         show_portfolio_analysis(analyzer, start_date, end_date)
@@ -665,35 +665,76 @@ def show_stock_analysis(analyzer, start_date, end_date):
         st.error("No ticker data available")
         return
 
-    # Build lookup once
-    symbol_dict = dict(zip(analyzer.ticker_data["Company Name"], analyzer.ticker_data["Symbol"]))
-    all_names = analyzer.ticker_data["Company Name"].tolist()
+    # Build type-specific lookup lists
+    assets_df = analyzer.ticker_data[["Company Name", "Symbol"]].copy()
+    assets_df["Asset Type"] = assets_df["Symbol"].astype(str).apply(
+        lambda s: "Mutual Fund" if s.startswith("MF:") else "Stock"
+    )
+    mf_assets = assets_df[assets_df["Asset Type"] == "Mutual Fund"]
+    stock_assets = assets_df[assets_df["Asset Type"] == "Stock"]
 
-    # Smooth selection UX: use a form so typing/clearing doesn't rerun the app on every keypress
+    # Use unique labels so same company names do not collide
+    mf_label_to_symbol = {
+        f"{row['Company Name']} ({row['Symbol']})": row["Symbol"]
+        for _, row in mf_assets.iterrows()
+    }
+    stock_label_to_symbol = {
+        f"{row['Company Name']} ({row['Symbol']})": row["Symbol"]
+        for _, row in stock_assets.iterrows()
+    }
+
+    # Dedicated search + select inputs for each asset type
     with st.form("price_analysis_picker"):
-        query = st.text_input("Search asset name (stocks + mutual funds)", value="", placeholder="Type to search…")
+        col1, col2 = st.columns(2)
 
-        # Filter client-side and cap results for responsiveness
-        q = query.strip().lower()
-        if q:
-            filtered = [n for n in all_names if q in n.lower()]
-        else:
-            filtered = all_names
-        if len(filtered) > 300:
-            filtered = filtered[:300]
-            st.caption("Showing first 300 matches. Narrow your search for more.")
+        with col1:
+            mf_query = st.text_input("Search Mutual Fund", value="", placeholder="Type mutual fund name…")
+            q_mf = mf_query.strip().lower()
+            mf_filtered = [
+                label for label in mf_label_to_symbol.keys()
+                if not q_mf or q_mf in label.lower()
+            ]
+            if len(mf_filtered) > 300:
+                mf_filtered = mf_filtered[:300]
+                st.caption("Mutual funds: showing first 300 matches.")
+            mf_options = ["-- Select Mutual Fund --"] + mf_filtered
+            selected_mf_label = st.selectbox("Select Mutual Fund", mf_options, index=0)
 
-        selected_stock = st.selectbox("Select an asset", filtered, index=0 if filtered else None)
+        with col2:
+            stock_query = st.text_input("Search Stock", value="", placeholder="Type stock name…")
+            q_stock = stock_query.strip().lower()
+            stock_filtered = [
+                label for label in stock_label_to_symbol.keys()
+                if not q_stock or q_stock in label.lower()
+            ]
+            if len(stock_filtered) > 300:
+                stock_filtered = stock_filtered[:300]
+                st.caption("Stocks: showing first 300 matches.")
+            stock_options = ["-- Select Stock --"] + stock_filtered
+            selected_stock_label = st.selectbox("Select Stock", stock_options, index=0)
+
         submitted = st.form_submit_button("Analyze Price")
 
     if not submitted:
         return
 
-    if not selected_stock:
-        st.warning("Please select an asset")
+    # Exactly one asset should be selected for individual analysis
+    has_mf = selected_mf_label != "-- Select Mutual Fund --"
+    has_stock = selected_stock_label != "-- Select Stock --"
+    if has_mf and has_stock:
+        st.warning("Please select either one mutual fund or one stock, not both.")
+        return
+    if not has_mf and not has_stock:
+        st.warning("Please select a mutual fund or a stock.")
         return
 
-    symbol = symbol_dict.get(selected_stock)
+    selected_label = selected_mf_label if has_mf else selected_stock_label
+    selected_stock = selected_label  # used in chart titles
+    symbol = (
+        mf_label_to_symbol.get(selected_mf_label)
+        if has_mf
+        else stock_label_to_symbol.get(selected_stock_label)
+    )
     if not symbol:
         st.error("Could not resolve symbol for the selected asset.")
         return
@@ -840,8 +881,8 @@ def show_stock_analysis(analyzer, start_date, end_date):
             st.error("Please try selecting a different stock or check your data connection.")
 
 def show_stock_prediction(analyzer, start_date, end_date):
-    """Price prediction using Prophet"""
-    st.header("🔮 Price Prediction")
+    """Price Forecasting using Prophet"""
+    st.header("🔮 Price Forecast")
     
     if analyzer.ticker_data.empty:
         st.error("No ticker data available")
@@ -849,7 +890,7 @@ def show_stock_prediction(analyzer, start_date, end_date):
     
     # Stock selection
     tickers = analyzer.ticker_data["Company Name"].tolist()
-    selected_stock = st.selectbox('Select a stock for prediction:', tickers)
+    selected_stock = st.selectbox('Select a stock for Forecasting:', tickers)
     
     if not selected_stock:
         st.warning("Please select a stock")
@@ -861,12 +902,12 @@ def show_stock_prediction(analyzer, start_date, end_date):
     # Prediction period
     col1, col2 = st.columns(2)
     with col1:
-        years = st.slider('Years to predict:', 1, 5, 1)
+        years = st.slider('Years to Forecast:', 1, 5, 1)
     with col2:
         confidence_interval = st.slider('Confidence Interval:', 80, 95, 80)
     
-    if st.button('Generate Prediction'):
-        with st.spinner('Generating prediction...'):
+    if st.button('Generate Forecast'):
+        with st.spinner('Generating Forecast...'):
             try:
                 # Fetch data
                 data = analyzer.get_stock_data(symbol, start_date, end_date)
@@ -897,7 +938,7 @@ def show_stock_prediction(analyzer, start_date, end_date):
                 forecast = model.predict(future)
                 
                 # Display results
-                st.subheader(f'📊 Prediction for {selected_stock}')
+                st.subheader(f'📊 Forecast for {selected_stock}')
                 
                 # Forecast plot
                 fig = plot_plotly(model, forecast)
@@ -923,9 +964,16 @@ def show_portfolio_analysis(analyzer, start_date, end_date):
 
     st.caption("Optimize a long-only portfolio (weights sum to 1) using a Monte Carlo mean-variance search.")
 
-    # --- Asset selection (smooth UX)
-    symbol_dict = dict(zip(analyzer.ticker_data["Company Name"], analyzer.ticker_data["Symbol"]))
-    all_names = analyzer.ticker_data["Company Name"].tolist()
+    # --- Asset selection (single mixed search bar for stocks + mutual funds)
+    assets_df = analyzer.ticker_data[["Company Name", "Symbol"]].copy()
+    assets_df["Asset Type"] = assets_df["Symbol"].astype(str).apply(
+        lambda s: "Mutual Fund" if s.startswith("MF:") else "Stock"
+    )
+    all_labels = [
+        f"{row['Company Name']} [{row['Asset Type']}] ({row['Symbol']})"
+        for _, row in assets_df.iterrows()
+    ]
+    label_to_symbol = dict(zip(all_labels, assets_df["Symbol"].tolist()))
 
     with st.form("portfolio_builder"):
         query = st.text_input(
@@ -935,9 +983,9 @@ def show_portfolio_analysis(analyzer, start_date, end_date):
         )
         q = query.strip().lower()
         if q:
-            filtered = [n for n in all_names if q in n.lower()]
+            filtered = [n for n in all_labels if q in n.lower()]
         else:
-            filtered = all_names
+            filtered = all_labels
         if len(filtered) > 300:
             filtered = filtered[:300]
             st.caption("Showing first 300 matches. Narrow your search for more.")
@@ -969,7 +1017,7 @@ def show_portfolio_analysis(analyzer, start_date, end_date):
 
     # Cap count for runtime / API stability
     selected_assets = selected_assets[:max_assets]
-    symbols = [symbol_dict.get(n) for n in selected_assets]
+    symbols = [label_to_symbol.get(n) for n in selected_assets]
     if any(s is None for s in symbols):
         st.error("One or more selected assets could not be resolved to a symbol.")
         return
