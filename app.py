@@ -15,15 +15,27 @@ warnings.filterwarnings('ignore')
 
 # Page configuration b
 st.set_page_config(
-    page_title="Stock Analyzer",
+    page_title="Market Dashboard",
     page_icon="📈",
     layout="wide",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="collapsed"
 )
 
 # Custom CSS
 st.markdown("""
 <style>
+    /* Pull the navbar and content closer to the top */
+    section.main > div.block-container {
+        padding-top: 0.5rem;
+    }
+
+    /* Keep option-menu navbar in normal flow to prevent overlap/stacking */
+    ul.nav.nav-pills {
+        position: static !important;
+        top: auto !important;
+        margin-top: 0.15rem !important;
+        margin-bottom: 0.75rem !important;
+    }
     .main-header {
         font-size: 3rem;
         color: #1f77b4;
@@ -547,28 +559,26 @@ class StockAnalyzer:
             return self.ticker_data.head(limit)
 
 def main():
-    st.markdown('<h1 class="main-header">📈 Stock Analyzer</h1>', unsafe_allow_html=True)
-    
     analyzer = StockAnalyzer()
+
+    # Top navigation bar (moved from sidebar)
+    selected = option_menu(
+        None,
+        [
+            "Dashboard",
+            "Price Analysis",
+            "Price Forecast",
+            "Portfolio Analysis",
+            "About"
+        ],
+        icons=['house', 'search', 'crystal-ball', 'pie-chart', 'info-circle'],
+        menu_icon="cast",
+        default_index=0,
+        orientation="horizontal",
+    )
     
     # Sidebar
     with st.sidebar:
-        st.markdown("## 📊 Navigation")
-        selected = option_menu(
-            "Main Menu",
-            [
-                "🏠 Dashboard",
-                "🔍 Price Analysis",
-                "🔮 Price Forecast",
-                "📊 Portfolio Analysis",
-                "ℹ️ About"
-            ],
-            icons=['house', 'search', 'crystal-ball', 'pie-chart', 'info-circle'],
-            menu_icon="cast",
-            default_index=0,
-        )
-        
-        st.markdown("---")
         st.markdown("## ⚙️ Settings")
         start_date = st.date_input('Start Date', datetime.date(2020, 1, 1))
         end_date = st.date_input('End Date', datetime.date.today())
@@ -583,20 +593,20 @@ def main():
             return
     
     # Main content based on selection
-    if selected == "🏠 Dashboard":
+    if selected == "Dashboard":
         show_dashboard(analyzer, start_date, end_date)
-    elif selected == "🔍 Price Analysis":
+    elif selected == "Price Analysis":
         show_stock_analysis(analyzer, start_date, end_date)
-    elif selected == "🔮 Price Forecast":
+    elif selected == "Price Forecast":
         show_stock_prediction(analyzer, start_date, end_date)
-    elif selected == "📊 Portfolio Analysis":
+    elif selected == "Portfolio Analysis":
         show_portfolio_analysis(analyzer, start_date, end_date)
-    elif selected == "ℹ️ About":
+    elif selected == "About":
         show_about()
 
 def show_dashboard(analyzer, start_date, end_date):
     """Main dashboard with market overview"""
-    st.header("📊 Market Dashboard")
+    st.header("Market Dashboard")
     
     col1, col2, col3, col4 = st.columns(4)
     
@@ -976,21 +986,13 @@ def show_portfolio_analysis(analyzer, start_date, end_date):
     label_to_symbol = dict(zip(all_labels, assets_df["Symbol"].tolist()))
 
     with st.form("portfolio_builder"):
-        query = st.text_input(
-            "Search assets to add (stocks + mutual funds)",
-            value="",
-            placeholder="Type to filter…",
+        # Streamlit multiselect already supports type-to-search.
+        # Keep it simple: one picker that includes both stocks + mutual funds.
+        selected_assets = st.multiselect(
+            "Search & select assets (stocks + mutual funds)",
+            options=all_labels,
+            default=[],
         )
-        q = query.strip().lower()
-        if q:
-            filtered = [n for n in all_labels if q in n.lower()]
-        else:
-            filtered = all_labels
-        if len(filtered) > 300:
-            filtered = filtered[:300]
-            st.caption("Showing first 300 matches. Narrow your search for more.")
-
-        selected_assets = st.multiselect("Select assets", options=filtered, default=[])
 
         colA, colB, colC = st.columns(3)
         with colA:
